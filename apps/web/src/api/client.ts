@@ -1,6 +1,6 @@
 import type { WorkflowDef } from "@ad-flow/shared";
 
-const BASE_URL = "http://localhost:3000/api";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export interface ApiError {
   message: string;

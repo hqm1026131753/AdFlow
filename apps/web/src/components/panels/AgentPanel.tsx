@@ -101,12 +101,12 @@ export function AgentPanel() {
         content: m.text,
       }));
 
-      const healthOk = await fetch("http://localhost:3000/api/health")
+      const healthOk = await fetch("/api/health")
         .then((r) => r.ok)
         .catch(() => false);
 
       if (!healthOk) {
-        throw new Error("无法连接到 API 服务器 (localhost:3000)，请确认 API 服务已启动。");
+        throw new Error("无法连接到 API 服务器，请确认后端服务已启动。");
       }
 
       const resp = await api.agent.chat({
@@ -141,7 +141,7 @@ export function AgentPanel() {
         ...prev,
         {
           role: "agent",
-          text: `抱歉，出了点问题：${msg || "未知错误"}。请检查 API 是否正常运行（http://localhost:3000/api/health）。`,
+          text: `抱歉，出了点问题：${msg || "未知错误"}。请检查 API 服务是否正常运行。`,
         },
       ]);
     } finally {
