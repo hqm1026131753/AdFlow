@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas-bg: #0a0a0a;
+  --color-panel-bg: #141414;
+  --color-node-bg: #1a1a1a;
+  --color-border: #2a2a2a;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* React Flow overrides */
+.react-flow__background {
+  background-color: var(--color-canvas-bg) !important;
+}
+
+.react-flow__controls button {
+  background: var(--color-panel-bg) !important;
+  border-color: var(--color-border) !important;
+  color: #999 !important;
+}
+
+.react-flow__minimap {
+  background: var(--color-panel-bg) !important;
+}
+
+/* Edge animation */
+@keyframes dashdraw {
+  from { stroke-dashoffset: 10; }
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
