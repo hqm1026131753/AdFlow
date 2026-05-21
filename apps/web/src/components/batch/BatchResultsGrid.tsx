@@ -1,5 +1,26 @@
+import { useState } from "react";
 import { Download, X } from "lucide-react";
 import { useExecutionStore } from "../../store/executionStore";
+
+function GridImage({ url }: { url: string }) {
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
+
+  const ratio = dims ? `${dims.w} / ${dims.h}` : "1 / 1";
+
+  return (
+    <img
+      src={url}
+      alt="Result"
+      onLoad={(e) => {
+        const img = e.currentTarget;
+        setDims({ w: img.naturalWidth, h: img.naturalHeight });
+      }}
+      className="w-full rounded-md border border-[#2a2a2a] object-contain bg-[#1e1e1e]"
+      style={{ aspectRatio: ratio }}
+      loading="lazy"
+    />
+  );
+}
 
 export function BatchResultsGrid() {
   const results = useExecutionStore((s) => s.batchResults);
@@ -26,12 +47,7 @@ export function BatchResultsGrid() {
         <div className="p-4 grid grid-cols-4 gap-3 overflow-y-auto">
           {results.map((result, i) => (
             <div key={i} className="flex flex-col gap-1">
-              <img
-                src={result.url}
-                alt={`Result ${i + 1}`}
-                className="w-full aspect-square object-cover rounded-md border border-[#2a2a2a]"
-                loading="lazy"
-              />
+              <GridImage url={result.url} />
               <div className="flex items-center justify-between px-0.5">
                 <span className="text-xs text-zinc-500 truncate">{result.size ?? "?"}</span>
                 <a

@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef } from "react";
+import { memo, useCallback, useState, useRef } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { NODE_TYPE_REGISTRY } from "@ad-flow/shared";
 import { useWorkflowStore, type AdFlowNode } from "../../../store/workflowStore";
@@ -15,6 +15,29 @@ const HANDLE_STYLE: React.CSSProperties = {
 };
 
 const PLACEHOLDER_SIZE = 160;
+const MAX_IMG_WIDTH = 200;
+
+function AdaptiveImage({ url }: { url: string }) {
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
+
+  const displayW = dims ? Math.min(dims.w, MAX_IMG_WIDTH) : MAX_IMG_WIDTH;
+  const displayH = dims
+    ? Math.round((displayW / dims.w) * dims.h)
+    : Math.round(MAX_IMG_WIDTH * 0.75);
+
+  return (
+    <img
+      src={url}
+      alt="Result"
+      onLoad={(e) => {
+        const img = e.currentTarget;
+        setDims({ w: img.naturalWidth, h: img.naturalHeight });
+      }}
+      className="rounded-lg object-contain bg-[#1e1e1e]"
+      style={{ width: displayW, height: displayH }}
+    />
+  );
+}
 
 function PlaceholderSquare({
   nodeType,
@@ -29,18 +52,19 @@ function PlaceholderSquare({
   const hasResults = results && results.length > 0;
 
   if (hasResults && isImage) {
-    return (
+    const count = Math.min(results.length, 4);
+    return count === 1 ? (
+      <AdaptiveImage url={results[0]} />
+    ) : (
       <div
-        className="rounded-lg overflow-hidden grid gap-0.5"
+        className="grid gap-1"
         style={{
-          width: PLACEHOLDER_SIZE,
-          height: PLACEHOLDER_SIZE,
-          gridTemplateColumns: results.length <= 2 ? `repeat(${results.length}, 1fr)` : "repeat(2, 1fr)",
-          gridTemplateRows: results.length <= 2 ? "1fr" : `repeat(${Math.ceil(results.length / 2)}, 1fr)`,
+          gridTemplateColumns: count <= 2 ? `repeat(${count}, 1fr)` : "repeat(2, 1fr)",
+          maxWidth: MAX_IMG_WIDTH * 2 + 4,
         }}
       >
         {results.slice(0, 4).map((url, i) => (
-          <img key={i} src={url} alt={`Result ${i + 1}`} className="w-full h-full object-cover" />
+          <AdaptiveImage key={i} url={url} />
         ))}
       </div>
     );
@@ -81,15 +105,17 @@ function PlaceholderSquare({
   );
 }
 
-export function BaseNode({ id, data, selected }: NodeProps<AdFlowNode>) {
+export const BaseNode = memo(function BaseNode({ id, data, selected }: NodeProps<AdFlowNode>) {
   const def = NODE_TYPE_REGISTRY[data.nodeType];
   const selectNode = useWorkflowStore((s) => s.selectNode);
   const updateNodeConfig = useWorkflowStore((s) => s.updateNodeConfig);
+  const updateNodeLabel = useWorkflowStore((s) => s.updateNodeLabel);
   const execStatus = useExecutionStore((s) => s.nodeStatuses[id]);
   const nodeResults = useExecutionStore((s) => s.nodeResults[id]);
   const status = execStatus || "idle";
 
   const [generating, setGenerating] = useState(false);
+  const [editingName, setEditingName] = useState(false);
   const [refImages, setRefImages] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -218,7 +244,38 @@ export function BaseNode({ id, data, selected }: NodeProps<AdFlowNode>) {
               <Image className="w-3 h-3" color={def.color} />
             )}
           </div>
-          <span className="text-xs font-medium text-zinc-300 flex-1">{def.displayName}</span>
+          {editingName ? (
+            <input
+              className="text-xs font-medium text-zinc-300 flex-1 bg-transparent border-b border-zinc-500 outline-none px-0.5"
+              defaultValue={data.label || def.displayName}
+              autoFocus
+              onFocus={(e) => e.target.select()}
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                if (v && v !== def.displayName) updateNodeLabel(id, v);
+                else updateNodeLabel(id, "");
+                setEditingName(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") {
+                  setEditingName(false);
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span
+              className="text-xs font-medium text-zinc-300 flex-1 cursor-text truncate"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingName(true);
+              }}
+              title="双击重命名"
+            >
+              {data.label || def.displayName}
+            </span>
+          )}
           <div
             className={`w-2 h-2 rounded-full ${
               isRunning ? "bg-yellow-400 animate-pulse" : status === "completed" ? "bg-emerald-400" : status === "failed" ? "bg-red-400" : "bg-zinc-600"
@@ -385,11 +442,11 @@ export function BaseNode({ id, data, selected }: NodeProps<AdFlowNode>) {
       )}
     </div>
   );
-}
+});
 
-export function TextGenNode(props: NodeProps) {
+export const TextGenNode = memo(function TextGenNode(props: NodeProps) {
   return <BaseNode {...(props as NodeProps<AdFlowNode>)} />;
-}
-export function ImageGenNode(props: NodeProps) {
+});
+export const ImageGenNode = memo(function ImageGenNode(props: NodeProps) {
   return <BaseNode {...(props as NodeProps<AdFlowNode>)} />;
-}
+});

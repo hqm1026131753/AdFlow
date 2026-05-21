@@ -51,7 +51,7 @@ export const api = {
   },
 
   scout: {
-    search: (params: { keywords: string; platform?: string; count?: number }) =>
+    search: (params: { keywords: string; source?: string; platform?: string }) =>
       request<{ references: Array<{ url: string; source: string; sourceUrl?: string; overall: number; reason: string }> }>(
         "/scout",
         { method: "POST", body: JSON.stringify(params) }

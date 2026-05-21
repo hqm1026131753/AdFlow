@@ -10,19 +10,20 @@ const executor = new AdScoutExecutor();
 // POST /api/scout — search ad references
 scoutRouter.post("/", async (req: Request, res: Response) => {
   try {
-    const { keywords, platform, count } = req.body;
+    const { keywords, source, platform } = req.body;
 
     if (!keywords?.trim()) {
       res.status(400).json({ error: "keywords required" });
       return;
     }
 
-    log("scout", `Searching "${keywords}" on ${platform ?? "pinterest"} (count: ${count ?? 10})`);
+    const lines = keywords.split("\n").filter((l: string) => l.trim());
+    log("scout", `Searching ${lines.length} keywords — source: ${source ?? "stock"}, platform: ${platform ?? "pinterest"}`);
 
     const ctx = new ExecutionContext("scout-standalone", 0);
     const result = await executor.execute(
       {},
-      { keywords, platform, count },
+      { keywords, source, platform },
       ctx
     );
 

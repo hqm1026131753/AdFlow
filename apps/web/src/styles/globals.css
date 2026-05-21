@@ -39,6 +39,29 @@ html, body, #root {
   from { stroke-dashoffset: 10; }
 }
 
+/* Dark minimal scrollbars */
+html {
+  scrollbar-color: #333 transparent;
+  scrollbar-width: thin;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 6px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Hide scrollbar utility */
 .scrollbar-hide {
   -ms-overflow-style: none;

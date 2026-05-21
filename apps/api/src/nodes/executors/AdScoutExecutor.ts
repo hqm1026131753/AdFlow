@@ -8,46 +8,125 @@ interface ScoredImage {
   source: string;
   sourceUrl?: string;
   scores: {
-    isAd: number;       // Is this an advertisement? (1-10)
-    quality: number;     // Visual quality (1-10)
-    style: number;       // Style professionalism (1-10)
-    usefulness: number;  // Reference usefulness (1-10)
+    isAd: number;
+    quality: number;
+    style: number;
+    usefulness: number;
   };
-  overall: number;       // Weighted average
+  overall: number;
   reason: string;
 }
 
 // ── Configuration ──
 
-const VLM_SCORE_THRESHOLD = 7; // Minimum overall score to keep
-
-// Weighted scoring formula (from ads_creativity benchmark approach)
+const VLM_SCORE_THRESHOLD = 7;
 const WEIGHTS = { isAd: 0.35, quality: 0.2, style: 0.15, usefulness: 0.3 };
+
+// ── Keyword translation map for stock photo quality ──
+
+const AD_KEYWORD_SUFFIXES: Record<string, string> = {
+  beauty: "beauty product commercial photography campaign",
+  skincare: "skincare product commercial photography campaign",
+  sunscreen: "sunscreen product commercial photography beach",
+  fashion: "fashion editorial commercial campaign photography",
+  sneaker: "sneaker product commercial campaign photography",
+  shoe: "shoe product commercial campaign photography",
+  food: "food product commercial advertising photography",
+  drink: "beverage commercial advertising photography",
+  tech: "tech product commercial advertising photography",
+  phone: "smartphone product commercial photography",
+  car: "automotive commercial campaign photography",
+  jewelry: "jewelry product commercial photography",
+  perfume: "perfume product commercial photography luxury",
+  watch: "watch product commercial photography luxury",
+  fitness: "fitness product commercial campaign photography",
+  home: "home decor commercial photography",
+  travel: "travel commercial campaign photography",
+  makeup: "makeup product commercial photography",
+  haircare: "haircare product commercial photography",
+  bag: "handbag product commercial photography luxury",
+  furniture: "furniture commercial photography interior",
+};
+
+function translateKeywords(keywords: string): string {
+  const lower = keywords.toLowerCase();
+  for (const [key, suffix] of Object.entries(AD_KEYWORD_SUFFIXES)) {
+    if (lower.includes(key)) return suffix;
+  }
+  // Generic fallback — append "commercial photography"
+  return `${keywords} commercial advertising photography`;
+}
 
 // ── Executor ──
 
 export class AdScoutExecutor extends NodeExecutor {
   readonly type = "ad-reference-search";
 
+  /**
+   * Parse quantity from user input.
+   * Supports: "5张", "3个", "10张图", "5 photos", "10 images", "2 pics", "找5张..."
+   * Returns [cleanedKeywords, count].
+   */
+  private parseIntent(input: string): [string, number] {
+    // Chinese patterns
+    let m = input.match(/(\d+)\s*[张个幅]/);
+    if (m) return [input.replace(m[0], "").trim(), parseInt(m[1], 10)];
+
+    // English patterns
+    m = input.match(/(\d+)\s*(photos?|images?|pics?|pictures?)/i);
+    if (m) return [input.replace(m[0], "").trim(), parseInt(m[1], 10)];
+
+    // "a photo" / "an image" = 1
+    if (/\ba\s+(photo|image|pic|picture)\b/i.test(input)) {
+      return [input.replace(/\ba\s+(photo|image|pic|picture)\b/i, "").trim(), 1];
+    }
+
+    return [input.trim(), 1];
+  }
+
   async execute(
     _inputs: Record<string, unknown>,
     config: Record<string, unknown>,
     _ctx: ExecutionContext
   ): Promise<{ references: ScoredImage[] }> {
-    const keywords = (config.keywords as string) ?? "";
+    const rawInput = (config.keywords as string) ?? "";
+    const source = (config.source as string) ?? "stock";
     const platform = (config.platform as string) ?? "pinterest";
-    const count = (config.count as number) ?? 10;
 
-    if (!keywords.trim()) {
+    if (!rawInput.trim()) {
       return { references: [] };
     }
 
-    // ── Step 1: Search platform for raw results ──
-    const rawImages = await this.searchPlatform(keywords, platform, Math.ceil(count * 3));
-    console.log(`[AdScout] Step 1 — Found ${rawImages.length} raw results for "${keywords}" on ${platform}`);
+    // Parse intent: extract count from natural language, clean keywords
+    const [keywords, count] = this.parseIntent(rawInput);
+    console.log(`[AdScout] Intent: "${keywords}" → ${count} images (source: ${source})`);
 
-    // ── Step 2: Pre-filter by heuristics ──
-    const filtered = rawImages.filter((img) => this.preFilter(img));
+    if (!keywords) {
+      return { references: [] };
+    }
+
+    // ── Step 1: Search ──
+    let rawImages: Omit<ScoredImage, "scores" | "overall" | "reason">[];
+
+    if (source === "manual") {
+      console.log(`[AdScout] Manual mode — waiting for user links`);
+      return { references: [] };
+    } else if (source === "social") {
+      rawImages = await this.searchPlatform(keywords, platform, Math.ceil(count * 3));
+    } else {
+      rawImages = await this.searchStock(keywords, Math.max(Math.ceil(count * 3), 8));
+    }
+
+    console.log(`[AdScout] Step 1 — ${rawImages.length} raw results`);
+
+    // ── Step 2: Pre-filter + deduplicate ──
+    const seen = new Set<string>();
+    const filtered = rawImages.filter((img) => {
+      if (!this.preFilter(img)) return false;
+      if (seen.has(img.url)) return false;
+      seen.add(img.url);
+      return true;
+    });
     console.log(`[AdScout] Step 2 — ${filtered.length} passed pre-filter`);
 
     // ── Step 3: VLM scoring ──
@@ -55,19 +134,138 @@ export class AdScoutExecutor extends NodeExecutor {
     const scored = await this.scoreBatch(filtered.slice(0, 20));
     console.log(`[AdScout] Step 3 — Scored ${scored.length} images`);
 
-    // ── Step 4: Curate — threshold filter + sort by overall score ──
-    // Use stricter threshold with VLM, looser with heuristic fallback
+    // ── Step 4: Curate ──
     const threshold = provider ? VLM_SCORE_THRESHOLD : 5;
     const curated = scored
       .filter((s) => s.overall >= threshold)
       .sort((a, b) => b.overall - a.overall)
       .slice(0, count);
 
-    console.log(`[AdScout] Step 4 — ${curated.length} curated results returned`);
+    console.log(`[AdScout] Step 4 — ${curated.length} curated results (wanted ${count})`);
     return { references: curated };
   }
 
-  // ── Platform search dispatcher ──
+  // ── Stock Photo API Search (Unsplash + Pexels + Pixabay) ──
+
+  private async searchStock(
+    keywords: string,
+    count: number
+  ): Promise<Omit<ScoredImage, "scores" | "overall" | "reason">[]> {
+    const query = translateKeywords(keywords);
+    console.log(`[AdScout] Stock search query: "${query}"`);
+
+    const results: Omit<ScoredImage, "scores" | "overall" | "reason">[] = [];
+    const perSource = Math.ceil(count / 3);
+
+    // Fire all 3 APIs in parallel
+    const [unsplash, pexels, pixabay] = await Promise.allSettled([
+      this.searchUnsplash(query, perSource),
+      this.searchPexels(query, perSource),
+      this.searchPixabay(query, perSource),
+    ]);
+
+    if (unsplash.status === "fulfilled") results.push(...unsplash.value);
+    if (pexels.status === "fulfilled") results.push(...pexels.value);
+    if (pixabay.status === "fulfilled") results.push(...pixabay.value);
+
+    // Fallback to mock if all APIs failed
+    if (results.length === 0) {
+      console.warn("[AdScout] All stock APIs failed — using mock fallback");
+      return this.mockSearch(query, count);
+    }
+
+    return results;
+  }
+
+  private async searchUnsplash(
+    query: string,
+    perPage: number
+  ): Promise<Omit<ScoredImage, "scores" | "overall" | "reason">[]> {
+    const key = process.env.UNSPLASH_ACCESS_KEY;
+    if (!key) return [];
+    try {
+      const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=${perPage}&orientation=landscape`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Client-ID ${key}` },
+      });
+      const data = (await res.json()) as {
+        results?: Array<{
+          id: string;
+          urls: { regular: string };
+          links: { html: string };
+          user: { name: string };
+        }>;
+      };
+      return (data.results ?? []).map((img) => ({
+        url: img.urls.regular,
+        source: `Unsplash — ${img.user.name}`,
+        sourceUrl: img.links.html,
+      }));
+    } catch (err) {
+      console.warn("[AdScout] Unsplash failed:", err);
+      return [];
+    }
+  }
+
+  private async searchPexels(
+    query: string,
+    perPage: number
+  ): Promise<Omit<ScoredImage, "scores" | "overall" | "reason">[]> {
+    const key = process.env.PEXELS_API_KEY;
+    if (!key) return [];
+    try {
+      const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=${perPage}&orientation=landscape`;
+      const res = await fetch(url, {
+        headers: { Authorization: key },
+      });
+      const data = (await res.json()) as {
+        photos?: Array<{
+          id: number;
+          src: { large: string };
+          url: string;
+          photographer: string;
+        }>;
+      };
+      return (data.photos ?? []).map((img) => ({
+        url: img.src.large,
+        source: `Pexels — ${img.photographer}`,
+        sourceUrl: img.url,
+      }));
+    } catch (err) {
+      console.warn("[AdScout] Pexels failed:", err);
+      return [];
+    }
+  }
+
+  private async searchPixabay(
+    query: string,
+    perPage: number
+  ): Promise<Omit<ScoredImage, "scores" | "overall" | "reason">[]> {
+    const key = process.env.PIXABAY_API_KEY;
+    if (!key) return [];
+    try {
+      const url = `https://pixabay.com/api/?key=${key}&q=${encodeURIComponent(query)}&per_page=${perPage}&orientation=horizontal&safesearch=true`;
+      const res = await fetch(url);
+      const data = (await res.json()) as {
+        hits?: Array<{
+          id: number;
+          largeImageURL: string;
+          pageURL: string;
+          user: string;
+        }>;
+      };
+      return (data.hits ?? []).map((img) => ({
+        url: img.largeImageURL,
+        source: `Pixabay — ${img.user}`,
+        sourceUrl: img.pageURL,
+      }));
+    } catch (err) {
+      console.warn("[AdScout] Pixabay failed:", err);
+      return [];
+    }
+  }
+
+  // ── Social Platform Search (legacy) ──
 
   private async searchPlatform(
     keywords: string,
@@ -81,7 +279,6 @@ export class AdScoutExecutor extends NodeExecutor {
 
     try {
       switch (platform) {
-        // ── Facebook / Instagram via Meta Ad Library API (free) ──
         case "facebook":
         case "instagram": {
           if (!FB_ACCESS_TOKEN) break;
@@ -89,11 +286,7 @@ export class AdScoutExecutor extends NodeExecutor {
           const url = `https://graph.facebook.com/v19.0/ads_archive?search_terms=${searchTerms}&ad_type=ALL&limit=${count}&fields=ad_snapshot_url,page_name,ad_creative_bodies&access_token=${FB_ACCESS_TOKEN}`;
           const res = await fetch(url);
           const data = (await res.json()) as {
-            data?: Array<{
-              ad_snapshot_url: string;
-              page_name: string;
-              ad_creative_bodies?: string[];
-            }>;
+            data?: Array<{ ad_snapshot_url: string; page_name: string }>;
           };
           return (data.data ?? []).map((ad) => ({
             url: ad.ad_snapshot_url,
@@ -102,7 +295,6 @@ export class AdScoutExecutor extends NodeExecutor {
           }));
         }
 
-        // ── Pinterest API ──
         case "pinterest": {
           if (!PINTEREST_TOKEN) break;
           const url = `https://api.pinterest.com/v5/pins/search?query=${encodeURIComponent(keywords)}&page_size=${count}`;
@@ -123,7 +315,6 @@ export class AdScoutExecutor extends NodeExecutor {
           }));
         }
 
-        // ── Google Custom Search (site-filtered) as fallback ──
         default: {
           if (!GOOGLE_API_KEY || !GOOGLE_CX) break;
           const siteFilter =
@@ -147,23 +338,19 @@ export class AdScoutExecutor extends NodeExecutor {
       console.warn(`[AdScout] Platform search failed for ${platform}:`, err);
     }
 
-    // Ultimate fallback: mock data with realistic structure
     return this.mockSearch(keywords, count);
   }
 
-  // ── Pre-filter heuristics ──
+  // ── Pre-filter ──
 
   private preFilter(img: { url: string }): boolean {
-    // Skip obviously invalid URLs
     if (!img.url || !img.url.startsWith("http")) return false;
-    // Skip tiny images (likely icons)
-    // (We can't check actual dimensions without fetching, but URL patterns help)
     const lower = img.url.toLowerCase();
     if (lower.includes("icon") || lower.includes("favicon") || lower.includes("avatar")) return false;
     return true;
   }
 
-  // ── VLM Scoring (Kimi / GPT-4V) ──
+  // ── VLM Scoring ──
 
   private getVLMProvider(): { apiKey: string; baseUrl: string; model: string; needsBase64: boolean } | null {
     const KIMI_API_KEY = process.env.KIMI_API_KEY;
@@ -171,7 +358,7 @@ export class AdScoutExecutor extends NodeExecutor {
       return {
         apiKey: KIMI_API_KEY,
         baseUrl: process.env.KIMI_BASE_URL ?? "https://api.moonshot.cn/v1",
-        model: "moonshot-v1-8k-vision-preview",
+        model: "kimi-k2.6",
         needsBase64: true,
       };
     }
@@ -179,8 +366,8 @@ export class AdScoutExecutor extends NodeExecutor {
     if (OPENAI_API_KEY) {
       return {
         apiKey: OPENAI_API_KEY,
-        baseUrl: "https://api.openai.com/v1",
-        model: "gpt-4o",
+        baseUrl: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
+        model: "gpt-5.4",
         needsBase64: false,
       };
     }
@@ -221,7 +408,6 @@ export class AdScoutExecutor extends NodeExecutor {
     provider: { apiKey: string; baseUrl: string; model: string; needsBase64: boolean }
   ): Promise<ScoredImage> {
     try {
-      // Resolve image URL — Kimi needs base64 data URI, OpenAI supports raw URLs
       let imageUrl = img.url;
       if (provider.needsBase64 && img.url.startsWith("http")) {
         imageUrl = await this.urlToBase64(img.url);
@@ -284,17 +470,16 @@ Return ONLY valid JSON: {"isAd":8,"quality":7,"style":8,"usefulness":9,"reason":
         reason: scores.reason ?? "VLM scored",
       };
     } catch (err) {
-      console.warn(`[AdScout] VLM scoring failed for ${img.url}:`, err);
+      console.warn(`[AdScout] VLM scoring failed:`, err);
       return this.heuristicScore(img);
     }
   }
 
-  // ── Heuristic fallback scoring (no API key) ──
+  // ── Heuristic fallback ──
 
   private heuristicScore(
     img: Omit<ScoredImage, "scores" | "overall" | "reason">
   ): ScoredImage {
-    // Mock heuristic: vary scores deterministically from URL
     const seed = img.url.length % 10;
     const scores = {
       isAd: 5 + seed * 0.4,
@@ -310,19 +495,23 @@ Return ONLY valid JSON: {"isAd":8,"quality":7,"style":8,"usefulness":9,"reason":
     };
   }
 
-  // ── Image URL → base64 for Kimi vision ──
+  // ── URL → base64 ──
 
   private async urlToBase64(url: string): Promise<string> {
     const res = await fetch(url);
     const contentType = res.headers.get("content-type") ?? "image/jpeg";
     const buffer = Buffer.from(await res.arrayBuffer());
-    const b64 = buffer.toString("base64");
-    return `data:${contentType};base64,${b64}`;
+    return `data:${contentType};base64,${buffer.toString("base64")}`;
   }
 
   // ── Helpers ──
 
-  private weightedScore(s: { isAd: number; quality: number; style: number; usefulness: number }): number {
+  private weightedScore(s: {
+    isAd: number;
+    quality: number;
+    style: number;
+    usefulness: number;
+  }): number {
     return parseFloat(
       (
         s.isAd * WEIGHTS.isAd +

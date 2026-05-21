@@ -10,17 +10,12 @@ export class TextGenExecutor extends NodeExecutor {
     _ctx: ExecutionContext
   ): Promise<{ texts: string[] }> {
     const prompt = (config.prompt as string) ?? "";
-    const model = (config.model as string) ?? "moonshot-v1-8k";
+    const model = (config.model as string) ?? "kimi-k2.6";
     const count = Math.min(config.count as number ?? 3, 20);
 
-    const KIMI_API_KEY = process.env.KIMI_API_KEY;
-    const KIMI_BASE_URL = process.env.KIMI_BASE_URL ?? "https://api.moonshot.cn/v1";
+    if (!prompt.trim()) return { texts: [] };
 
-    if (!prompt.trim()) {
-      return { texts: [] };
-    }
-
-    // Gather context from input ports (text[] from connected text-source nodes)
+    // Gather context from input ports
     const contextTexts = (inputs.context as string[]) ?? [];
     const contextBlock = contextTexts.length > 0
       ? `\n\n参考素材:\n${contextTexts.map((t, i) => `[${i + 1}] ${t}`).join("\n")}`
@@ -30,12 +25,34 @@ export class TextGenExecutor extends NodeExecutor {
 
 返回格式：用 JSON 数组返回，每个元素是一个对象 {"title": "标题", "body": "正文"}。只返回 JSON，不要其他内容。`;
 
+    // Route to OpenAI or Kimi based on model
+    if (model.startsWith("gpt-")) {
+      return this.callOpenAI(model, systemPrompt, prompt, contextBlock, count);
+    }
+    return this.callKimi(model, systemPrompt, prompt, contextBlock, count);
+  }
+
+  private async callKimi(
+    model: string,
+    systemPrompt: string,
+    prompt: string,
+    contextBlock: string,
+    count: number
+  ): Promise<{ texts: string[] }> {
+    const apiKey = process.env.KIMI_API_KEY;
+    const baseUrl = process.env.KIMI_BASE_URL ?? "https://api.moonshot.cn/v1";
+
+    if (!apiKey) {
+      console.warn("[TextGen] No KIMI_API_KEY — using fallback");
+      return { texts: this.fallbackTexts(prompt, count) };
+    }
+
     try {
-      const res = await fetch(`${KIMI_BASE_URL}/chat/completions`, {
+      const res = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${KIMI_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
           model,
@@ -52,19 +69,63 @@ export class TextGenExecutor extends NodeExecutor {
         choices?: Array<{ message?: { content?: string } }>;
       };
       const content = data.choices?.[0]?.message?.content ?? "[]";
-
-      // Parse the JSON array response
       const jsonMatch = content.match(/\[[\s\S]*\]/);
       const items: Array<{ title: string; body: string }> = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+      const texts = items.slice(0, count).map((item) => `${item.title}\n\n${item.body}`);
 
-      const texts = items.slice(0, count).map((item) =>
-        `${item.title}\n\n${item.body}`
-      );
-
-      console.log(`[TextGen] Generated ${texts.length} text variants via Kimi`);
+      console.log(`[TextGen] Generated ${texts.length} text variants via ${model}`);
       return { texts };
     } catch (err) {
-      console.warn("[TextGen] Kimi API call failed:", err);
+      console.warn("[TextGen] Kimi call failed:", err);
+      return { texts: this.fallbackTexts(prompt, count) };
+    }
+  }
+
+  private async callOpenAI(
+    model: string,
+    systemPrompt: string,
+    prompt: string,
+    contextBlock: string,
+    count: number
+  ): Promise<{ texts: string[] }> {
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+      console.warn("[TextGen] No OPENAI_API_KEY — using fallback");
+      return { texts: this.fallbackTexts(prompt, count) };
+    }
+
+    try {
+      const baseUrl = process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `${prompt}${contextBlock}` },
+          ],
+          max_tokens: 2000,
+          temperature: 0.8,
+        }),
+      });
+
+      const data = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const content = data.choices?.[0]?.message?.content ?? "[]";
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      const items: Array<{ title: string; body: string }> = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+      const texts = items.slice(0, count).map((item) => `${item.title}\n\n${item.body}`);
+
+      console.log(`[TextGen] Generated ${texts.length} text variants via ${model}`);
+      return { texts };
+    } catch (err) {
+      console.warn("[TextGen] OpenAI call failed:", err);
       return { texts: this.fallbackTexts(prompt, count) };
     }
   }

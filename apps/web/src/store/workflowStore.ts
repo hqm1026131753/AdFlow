@@ -4,7 +4,7 @@ import { NODE_TYPE_REGISTRY, type NodeInstance } from "@ad-flow/shared";
 import { api, type WorkflowListItem } from "../api/client";
 import { nanoid } from "../lib/nanoid";
 
-export type AdFlowNode = Node<{ nodeType: string; config: Record<string, unknown>; status: string }>;
+export type AdFlowNode = Node<{ nodeType: string; label?: string; config: Record<string, unknown>; status: string }>;
 
 interface GraphSnapshot {
   nodes: AdFlowNode[];
@@ -12,6 +12,21 @@ interface GraphSnapshot {
 }
 
 const MAX_HISTORY = 50;
+
+function stripNode(n: AdFlowNode) {
+  return { id: n.id, type: n.type, position: { ...n.position }, data: { ...n.data } };
+}
+
+function pushHistory(state: { nodes: AdFlowNode[]; edges: Edge[]; history: GraphSnapshot[]; historyIndex: number }) {
+  const snapshot: GraphSnapshot = {
+    nodes: state.nodes.map(stripNode) as AdFlowNode[],
+    edges: state.edges.map((e) => ({ ...e })),
+  };
+  const newHistory = state.history.slice(0, state.historyIndex + 1);
+  newHistory.push(snapshot);
+  if (newHistory.length > MAX_HISTORY) newHistory.shift();
+  return { history: newHistory, historyIndex: newHistory.length - 1 };
+}
 
 interface WorkflowState {
   workflowId: string | null;
@@ -25,14 +40,12 @@ interface WorkflowState {
   batchItems: Array<{ index: number; label: string; productImage?: string; uploadedId?: string; file?: File }>;
   showBatchUpload: boolean;
 
-  // Undo/redo
   history: GraphSnapshot[];
   historyIndex: number;
   saveHistory: () => void;
   undo: () => void;
   redo: () => void;
 
-  // Canvas actions
   onNodesChange: OnNodesChange<AdFlowNode>;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
@@ -40,8 +53,8 @@ interface WorkflowState {
   removeSelectedNodes: () => void;
   selectNode: (nodeId: string | null) => void;
   updateNodeConfig: (nodeId: string, config: Record<string, unknown>) => void;
+  updateNodeLabel: (nodeId: string, label: string) => void;
 
-  // Persistence actions
   saveWorkflow: () => Promise<void>;
   loadWorkflow: (id: string) => Promise<void>;
   newWorkflow: () => void;
@@ -65,21 +78,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   batchItems: [],
   showBatchUpload: false,
 
-  // ── Undo/Redo ──
-
   history: [],
   historyIndex: -1,
 
   saveHistory: () => {
-    const { nodes, edges, history, historyIndex } = get();
-    const snapshot: GraphSnapshot = {
-      nodes: JSON.parse(JSON.stringify(nodes)),
-      edges: JSON.parse(JSON.stringify(edges)),
-    };
-    const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push(snapshot);
-    if (newHistory.length > MAX_HISTORY) newHistory.shift();
-    set({ history: newHistory, historyIndex: newHistory.length - 1 });
+    set(pushHistory(get()));
   },
 
   undo: () => {
@@ -87,8 +90,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     if (historyIndex < 0) return;
     const snapshot = history[historyIndex];
     set({
-      nodes: JSON.parse(JSON.stringify(snapshot.nodes)),
-      edges: JSON.parse(JSON.stringify(snapshot.edges)),
+      nodes: snapshot.nodes.map((n) => ({ ...n, position: { ...n.position }, data: { ...n.data } })),
+      edges: snapshot.edges.map((e) => ({ ...e })),
       historyIndex: historyIndex - 1,
       selectedNodeId: null,
     });
@@ -99,14 +102,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     if (historyIndex >= history.length - 1) return;
     const snapshot = history[historyIndex + 1];
     set({
-      nodes: JSON.parse(JSON.stringify(snapshot.nodes)),
-      edges: JSON.parse(JSON.stringify(snapshot.edges)),
+      nodes: snapshot.nodes.map((n) => ({ ...n, position: { ...n.position }, data: { ...n.data } })),
+      edges: snapshot.edges.map((e) => ({ ...e })),
       historyIndex: historyIndex + 1,
       selectedNodeId: null,
     });
   },
-
-  // ── Canvas actions ──
 
   onNodesChange: (changes) => {
     set({ nodes: applyNodeChanges(changes, get().nodes) as AdFlowNode[] });
@@ -117,33 +118,31 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   onConnect: (connection: Connection) => {
-    get().saveHistory();
-    set({ edges: addEdge(connection, get().edges) });
+    const state = get();
+    set({ ...pushHistory(state), edges: addEdge(connection, state.edges) });
   },
 
-  addNode: (nodeType: string, position: { x: number; y: number }) => {
+  addNode: (nodeType, position) => {
     const def = NODE_TYPE_REGISTRY[nodeType];
     if (!def) return;
-
-    get().saveHistory();
-
+    const state = get();
     const newNode: AdFlowNode = {
       id: nanoid(),
       type: nodeType,
       position,
       data: { nodeType, config: { ...def.defaultConfig }, status: "idle" },
     };
-
-    set({ nodes: [...get().nodes, newNode] });
+    set({ ...pushHistory(state), nodes: [...state.nodes, newNode] });
   },
 
   removeSelectedNodes: () => {
-    const selected = get().selectedNodeId;
+    const state = get();
+    const selected = state.selectedNodeId;
     if (!selected) return;
-    get().saveHistory();
     set({
-      nodes: get().nodes.filter((n) => n.id !== selected),
-      edges: get().edges.filter((e) => e.source !== selected && e.target !== selected),
+      ...pushHistory(state),
+      nodes: state.nodes.filter((n) => n.id !== selected),
+      edges: state.edges.filter((e) => e.source !== selected && e.target !== selected),
       selectedNodeId: null,
     });
   },
@@ -151,15 +150,24 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   selectNode: (nodeId) => set({ selectedNodeId: nodeId }),
 
   updateNodeConfig: (nodeId, config) => {
-    get().saveHistory();
+    const state = get();
     set({
-      nodes: get().nodes.map((n) =>
+      ...pushHistory(state),
+      nodes: state.nodes.map((n) =>
         n.id === nodeId ? { ...n, data: { ...n.data, config } } : n
       ),
     });
   },
 
-  // ── Persistence actions ──
+  updateNodeLabel: (nodeId, label) => {
+    const state = get();
+    set({
+      ...pushHistory(state),
+      nodes: state.nodes.map((n) =>
+        n.id === nodeId ? { ...n, data: { ...n.data, label } } : n
+      ),
+    });
+  },
 
   getWorkflowDef: () => {
     const state = get();
@@ -168,6 +176,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       nodes: state.nodes.map((n) => ({
         id: n.id,
         nodeType: n.data.nodeType,
+        label: n.data.label,
         position: n.position,
         config: n.data.config,
       })),
@@ -209,7 +218,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         id: n.id,
         type: n.nodeType,
         position: n.position,
-        data: { nodeType: n.nodeType, config: n.config ?? {}, status: "idle" },
+        data: { nodeType: n.nodeType, label: (n as Record<string, unknown>).label as string | undefined, config: n.config ?? {}, status: "idle" },
       }));
       const loadedEdges: Edge[] = wf.edges.map((e) => ({
         id: e.id,

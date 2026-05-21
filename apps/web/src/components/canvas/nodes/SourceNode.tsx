@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { memo, useCallback, useState } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { NODE_TYPE_REGISTRY } from "@ad-flow/shared";
 import { useWorkflowStore, type AdFlowNode } from "../../../store/workflowStore";
@@ -12,10 +12,50 @@ const HANDLE_STYLE: React.CSSProperties = {
   borderRadius: "50%",
 };
 
-export function SourceNode({ id, data, selected }: NodeProps<AdFlowNode>) {
+const MAX_WIDTH = 220;
+
+function ImageCell({ url, onRemove }: { url: string; onRemove: () => void }) {
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
+
+  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    setDims({ w: img.naturalWidth, h: img.naturalHeight });
+  };
+
+  // Calculate display dimensions preserving aspect ratio
+  const displayW = dims ? Math.min(dims.w, MAX_WIDTH) : MAX_WIDTH;
+  const displayH = dims
+    ? Math.round((displayW / dims.w) * dims.h)
+    : Math.round(MAX_WIDTH * 0.75); // fallback 4:3
+
+  return (
+    <div className="relative group/img" style={{ width: displayW, height: displayH }}>
+      <img
+        src={url}
+        alt="Source"
+        onLoad={handleLoad}
+        className="w-full h-full object-contain rounded-lg bg-[#1e1e1e]"
+      />
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-zinc-800/80 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
+      >
+        <X className="w-3 h-3 text-zinc-300" />
+      </button>
+    </div>
+  );
+}
+
+export const SourceNode = memo(function SourceNode({ id, data, selected }: NodeProps<AdFlowNode>) {
   const def = NODE_TYPE_REGISTRY[data.nodeType];
   const selectNode = useWorkflowStore((s) => s.selectNode);
   const updateNodeConfig = useWorkflowStore((s) => s.updateNodeConfig);
+  const updateNodeLabel = useWorkflowStore((s) => s.updateNodeLabel);
+
+  const [editingName, setEditingName] = useState(false);
 
   if (!def) return null;
 
@@ -35,12 +75,25 @@ export function SourceNode({ id, data, selected }: NodeProps<AdFlowNode>) {
     ? "ring-2 ring-white/40"
     : "ring-1 ring-zinc-700/50";
 
+  const isGrid = images.length > 1;
+
   return (
     <div
       onClick={onClick}
       className={`bg-[#1a1a1a] rounded-xl ${ringColor} cursor-pointer hover:ring-zinc-500/50 transition-shadow overflow-visible group/node`}
+      style={{ minWidth: 80 }}
     >
-      {/* Handles — output only */}
+      {/* Handles — input + output */}
+      {def.inputs.map((port) => (
+        <Handle
+          key={port.id}
+          type="target"
+          position={Position.Left}
+          id={port.id}
+          style={HANDLE_STYLE}
+          className="!opacity-0 group-hover/node:!opacity-100 transition-opacity"
+        />
+      ))}
       {def.outputs.map((port) => (
         <Handle
           key={port.id}
@@ -67,37 +120,59 @@ export function SourceNode({ id, data, selected }: NodeProps<AdFlowNode>) {
             <Image className="w-3 h-3" color={def.color} />
           )}
         </div>
-        <span className="text-xs font-medium text-zinc-300 flex-1">{def.displayName}</span>
+        {editingName ? (
+          <input
+            className="text-xs font-medium text-zinc-300 flex-1 bg-transparent border-b border-zinc-500 outline-none px-0.5"
+            defaultValue={data.label || def.displayName}
+            autoFocus
+            onFocus={(e) => e.target.select()}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (v && v !== def.displayName) updateNodeLabel(id, v);
+              else updateNodeLabel(id, "");
+              setEditingName(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") {
+                setEditingName(false);
+              }
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span
+            className="text-xs font-medium text-zinc-300 flex-1 cursor-text truncate"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingName(true);
+            }}
+            title="点击重命名"
+          >
+            {data.label || def.displayName}
+          </span>
+        )}
       </div>
 
       {/* Body */}
       <div className="px-3 pb-3 pt-2 flex justify-center">
         {isImageSource ? (
           images.length > 0 ? (
-            <div
-              className="rounded-lg overflow-hidden grid gap-0.5"
-              style={{
-                width: 160,
-                height: 160,
-                gridTemplateColumns: images.length === 1 ? "1fr" : "repeat(2, 1fr)",
-                gridTemplateRows: images.length === 1 ? "1fr" : `repeat(${Math.ceil(images.length / 2)}, 1fr)`,
-              }}
-            >
-              {images.slice(0, 4).map((url, i) => (
-                <div key={i} className="relative group/img">
-                  <img src={url} alt={`Source ${i + 1}`} className="w-full h-full object-cover" />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeImage(i);
-                    }}
-                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-zinc-800/80 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
-                  >
-                    <X className="w-3 h-3 text-zinc-300" />
-                  </button>
-                </div>
-              ))}
-            </div>
+            isGrid ? (
+              <div
+                className="grid gap-1"
+                style={{
+                  gridTemplateColumns: `repeat(${Math.min(images.length, 2)}, 1fr)`,
+                  maxWidth: MAX_WIDTH * 2 + 4,
+                }}
+              >
+                {images.slice(0, 4).map((url, i) => (
+                  <ImageCell key={i} url={url} onRemove={() => removeImage(i)} />
+                ))}
+              </div>
+            ) : (
+              <ImageCell url={images[0]} onRemove={() => removeImage(0)} />
+            )
           ) : (
             <div
               className="rounded-lg bg-[#1e1e1e] border border-dashed border-[#2a2a2a] flex items-center justify-center"
@@ -124,11 +199,11 @@ export function SourceNode({ id, data, selected }: NodeProps<AdFlowNode>) {
       </div>
     </div>
   );
-}
+});
 
-export function ImageSourceNode(props: NodeProps) {
+export const ImageSourceNode = memo(function ImageSourceNode(props: NodeProps) {
   return <SourceNode {...(props as NodeProps<AdFlowNode>)} />;
-}
-export function TextSourceNode(props: NodeProps) {
+});
+export const TextSourceNode = memo(function TextSourceNode(props: NodeProps) {
   return <SourceNode {...(props as NodeProps<AdFlowNode>)} />;
-}
+});

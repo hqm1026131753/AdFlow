@@ -21,6 +21,8 @@ import {
   Palette,
   ArrowRight,
   RotateCcw,
+  Clock,
+  Trash2,
 } from "lucide-react";
 
 // ── Types ──
@@ -56,13 +58,40 @@ const SKILLS: SkillItem[] = [
   { label: "所有技能", text: "你能帮我做什么？", icon: <Sparkles className="w-3.5 h-3.5" />, color: "#6366F1" },
 ];
 
+// ── Chat History ──
+
+interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: number;
+  messages: Message[];
+}
+
+const HISTORY_KEY = "adflow_agent_chat_history";
+
+function loadSessions(): ChatSession[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSessions(sessions: ChatSession[]) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(sessions.slice(0, 50)));
+}
+
 // ── Component ──
 
 export function AgentPanel() {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showSkills, setShowSkills] = useState(true);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>(loadSessions);
+  const [showHistory, setShowHistory] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -72,6 +101,22 @@ export function AgentPanel() {
   // Auto-scroll to bottom
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  // Auto-save current session
+  useEffect(() => {
+    if (messages.length > 0 && sessionId) {
+      const title = messages.find((m) => m.role === "user")?.text.slice(0, 30) ?? "新对话";
+      const updated = chatSessions.map((s) =>
+        s.id === sessionId ? { ...s, messages, title, createdAt: Date.now() } : s
+      );
+      const exists = chatSessions.some((s) => s.id === sessionId);
+      if (!exists) {
+        updated.unshift({ id: sessionId, title, createdAt: Date.now(), messages });
+      }
+      saveSessions(updated);
+      setChatSessions(updated);
+    }
   }, [messages]);
 
   // Hide skills once conversation starts
@@ -94,6 +139,8 @@ export function AgentPanel() {
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setLoading(true);
+    // Auto-create session id on first message
+    if (!sessionId) setSessionId(Date.now().toString(36));
 
     try {
       const history = [...messages, userMsg].map((m) => ({
@@ -172,17 +219,66 @@ export function AgentPanel() {
   };
 
   const handleNewChat = () => {
+    // Save current session if it has messages
+    if (messages.length > 0) {
+      const title = messages.find((m) => m.role === "user")?.text.slice(0, 30) ?? "新对话";
+      const updated: ChatSession[] = sessionId
+        ? chatSessions.map((s) => (s.id === sessionId ? { ...s, messages, title } : s))
+        : [{ id: Date.now().toString(36), title, createdAt: Date.now(), messages }, ...chatSessions];
+      saveSessions(updated);
+      setChatSessions(updated);
+    }
     setMessages([]);
+    setSessionId(null);
     setShowSkills(true);
     setInput("");
+    setShowHistory(false);
+  };
+
+  const loadSession = (s: ChatSession) => {
+    // Save current session first
+    if (messages.length > 0 && sessionId) {
+      const title = messages.find((m) => m.role === "user")?.text.slice(0, 30) ?? "新对话";
+      const updated = chatSessions.map((cs) => (cs.id === sessionId ? { ...cs, messages, title } : cs));
+      saveSessions(updated);
+      setChatSessions(updated);
+    }
+    setMessages(s.messages);
+    setSessionId(s.id);
+    setShowSkills(false);
+    setShowHistory(false);
+  };
+
+  const deleteSession = (id: string) => {
+    const updated = chatSessions.filter((s) => s.id !== id);
+    saveSessions(updated);
+    setChatSessions(updated);
+    if (sessionId === id) {
+      setMessages([]);
+      setSessionId(null);
+      setShowSkills(true);
+    }
   };
 
   return (
     <div className="w-[420px] shrink-0 bg-[#0f0f0f] border-l border-[#1f1f1f] flex flex-col h-full">
       {/* Header */}
-      <div className="px-4 py-3 flex items-center justify-between shrink-0">
-        <span className="text-sm font-medium text-zinc-300">新对话</span>
+      <div className="px-4 py-3 flex items-center justify-between shrink-0 relative">
+        <span className="text-sm font-medium text-zinc-300">
+          {sessionId ? "对话中" : "新对话"}
+        </span>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowHistory((v) => !v)}
+            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+              showHistory
+                ? "bg-[#1a1a1a] border border-zinc-500 text-zinc-300"
+                : "bg-[#1a1a1a] border border-[#2a2a2a] text-zinc-500 hover:text-zinc-300 hover:border-zinc-500"
+            }`}
+            title="聊天记录"
+          >
+            <Clock className="w-3.5 h-3.5" />
+          </button>
           <button
             onClick={handleNewChat}
             className="w-7 h-7 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center text-zinc-500 hover:text-zinc-300 hover:border-zinc-500 transition-colors"
@@ -191,6 +287,61 @@ export function AgentPanel() {
             <Plus className="w-3.5 h-3.5" />
           </button>
         </div>
+
+        {/* History dropdown */}
+        {showHistory && (
+          <div
+            className="absolute top-full right-0 mt-1 w-72 bg-[#141414] rounded-xl border border-[#2a2a2a] shadow-2xl shadow-black/60 z-50 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-3 py-2 border-b border-[#1f1f1f] flex items-center justify-between">
+              <span className="text-xs text-zinc-500">聊天记录</span>
+              <span className="text-[10px] text-zinc-600">{chatSessions.length} 条</span>
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {chatSessions.length === 0 ? (
+                <div className="px-3 py-6 text-center text-xs text-zinc-600">
+                  <Clock className="w-5 h-5 mx-auto mb-1 opacity-30" />
+                  暂无聊天记录
+                </div>
+              ) : (
+                chatSessions.map((s) => (
+                  <div
+                    key={s.id}
+                    className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-[#1a1a1a] transition-colors ${
+                      sessionId === s.id ? "bg-[#1a1a1a]" : ""
+                    }`}
+                    onClick={() => loadSession(s)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-zinc-400 truncate">{s.title}</div>
+                      <div className="text-[10px] text-zinc-600 mt-0.5">
+                        {new Date(s.createdAt).toLocaleString("zh-CN", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                        {" · "}
+                        {s.messages.length} 条消息
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteSession(s.id);
+                      }}
+                      className="w-5 h-5 rounded flex items-center justify-center text-zinc-600 hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                      title="删除"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main content area */}
