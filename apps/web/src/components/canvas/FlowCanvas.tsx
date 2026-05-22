@@ -94,6 +94,7 @@ export function FlowCanvas() {
     onConnect,
     addNode,
     selectNode,
+    deleteEdges,
   } = useWorkflowStore();
 
   const { screenToFlowPosition } = useReactFlow();
@@ -154,6 +155,16 @@ export function FlowCanvas() {
     selectNode(null);
   }, [selectNode]);
 
+  // Drag edge to empty space → delete
+  const onReconnectEnd = useCallback(
+    (_: unknown, oldEdge: Edge, newConnection: Connection | null) => {
+      if (!newConnection) {
+        deleteEdges([oldEdge.id]);
+      }
+    },
+    [deleteEdges]
+  );
+
   // Keyboard shortcuts: Delete/Backspace to remove selected node, Escape to deselect
   const removeSelectedNodes = useWorkflowStore((s) => s.removeSelectedNodes);
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
@@ -206,6 +217,8 @@ export function FlowCanvas() {
           isValidConnection={isValidConnection}
           connectionMode={ConnectionMode.Loose}
           connectionRadius={60}
+          edgesReconnectable
+          onReconnectEnd={onReconnectEnd}
           nodeTypes={nodeTypes}
           fitView
           proOptions={{ hideAttribution: true }}

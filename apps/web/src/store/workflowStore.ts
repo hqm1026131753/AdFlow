@@ -51,6 +51,7 @@ interface WorkflowState {
   onConnect: OnConnect;
   addNode: (nodeType: string, position: { x: number; y: number }) => void;
   removeSelectedNodes: () => void;
+  deleteEdges: (edgeIds: string[]) => void;
   selectNode: (nodeId: string | null) => void;
   updateNodeConfig: (nodeId: string, config: Record<string, unknown>) => void;
   updateNodeLabel: (nodeId: string, label: string) => void;
@@ -144,6 +145,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       nodes: state.nodes.filter((n) => n.id !== selected),
       edges: state.edges.filter((e) => e.source !== selected && e.target !== selected),
       selectedNodeId: null,
+    });
+  },
+
+  deleteEdges: (edgeIds) => {
+    const state = get();
+    set({
+      ...pushHistory(state),
+      edges: state.edges.filter((e) => !edgeIds.includes(e.id)),
     });
   },
 
