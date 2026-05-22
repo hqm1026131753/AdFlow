@@ -1,10 +1,10 @@
-import { memo, useCallback, useState, useRef } from "react";
+import { memo, useCallback, useState, useRef, useEffect } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { NODE_TYPE_REGISTRY } from "@ad-flow/shared";
 import { useWorkflowStore, type AdFlowNode } from "../../../store/workflowStore";
 import { useExecutionStore } from "../../../store/executionStore";
 import { api } from "../../../api/client";
-import { Type, Image, Loader2, Play, X, Plus } from "lucide-react";
+import { Type, Image, Loader2, Play, X, Plus, Grid3X3 } from "lucide-react";
 
 const HANDLE_STYLE: React.CSSProperties = {
   width: 14,
@@ -117,7 +117,20 @@ export const BaseNode = memo(function BaseNode({ id, data, selected }: NodeProps
   const [generating, setGenerating] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [refImages, setRefImages] = useState<string[]>([]);
+  const [showCountPicker, setShowCountPicker] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const countPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showCountPicker) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (countPickerRef.current && !countPickerRef.current.contains(e.target as Node)) {
+        setShowCountPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [showCountPicker]);
 
   const config = (data.config as Record<string, unknown>) ?? {};
   const metaList = def?.configMeta ?? [];
@@ -388,33 +401,41 @@ export const BaseNode = memo(function BaseNode({ id, data, selected }: NodeProps
 
             <div className="flex-1" />
 
-            {/* Count — borderless */}
-            <div className="flex items-center gap-1">
+            {/* Count picker */}
+            <div className="relative" ref={countPickerRef}>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  const cur = (config.count as number) ?? 1;
-                  const min = metaList.find((m) => m.key === "count")?.min ?? 1;
-                  if (cur > min) update("count", cur - 1);
+                  setShowCountPicker((v) => !v);
                 }}
-                className="w-6 h-6 flex items-center justify-center text-zinc-600 hover:text-zinc-300 text-sm transition-colors"
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg hover:bg-white/5 text-xs text-zinc-400 hover:text-zinc-200 font-mono tabular-nums transition-colors"
               >
-                −
+                <Grid3X3 className="w-3 h-3" />
+                <span>{config.count as number}</span>
               </button>
-              <span className="text-sm text-zinc-300 w-5 text-center font-mono tabular-nums">
-                {config.count as number}
-              </span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const cur = (config.count as number) ?? 1;
-                  const max = metaList.find((m) => m.key === "count")?.max ?? 20;
-                  if (cur < max) update("count", cur + 1);
-                }}
-                className="w-6 h-6 flex items-center justify-center text-zinc-600 hover:text-zinc-300 text-sm transition-colors"
-              >
-                +
-              </button>
+              {showCountPicker && (
+                <div
+                  className="absolute left-0 bottom-full mb-1 bg-[#1a1a1a] rounded-lg border border-[#2a2a2a] shadow-xl z-50 flex gap-1 p-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {[1, 2, 3, 4].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => {
+                        update("count", n);
+                        setShowCountPicker(false);
+                      }}
+                      className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-mono transition-all ${
+                        n === ((config.count as number) ?? 1)
+                          ? "bg-violet-600 text-white"
+                          : "text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Credits */}

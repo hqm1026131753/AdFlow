@@ -14,7 +14,7 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeDef> = {
     defaultConfig: {
       model: "gpt-4o",
       prompt: "",
-      count: 3,
+      count: 1,
     },
     configMeta: [
       { key: "prompt", label: "输入提示词", type: "text", defaultValue: "", description: "描述你想生成的文案内容和风格" },
@@ -23,7 +23,7 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeDef> = {
         { label: "kimi-k2.5", value: "kimi-k2.5" },
         { label: "gpt-5.4", value: "gpt-5.4" },
       ]},
-      { key: "count", label: "生成数量", type: "slider", defaultValue: 3, min: 1, max: 20, step: 1 },
+      { key: "count", label: "生成数量", type: "slider", defaultValue: 1, min: 1, max: 4, step: 1 },
     ],
   },
   "image-generator": {
@@ -42,7 +42,7 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeDef> = {
       prompt: "",
       aspectRatio: "1:1",
       quality: "hd",
-      count: 4,
+      count: 1,
     },
     configMeta: [
       { key: "prompt", label: "输入提示词", type: "text", defaultValue: "", description: "描述你想生成的图片内容和风格" },
@@ -62,7 +62,7 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeDef> = {
         { label: "HD 高清", value: "hd" },
         { label: "Standard 标准", value: "standard" },
       ]},
-      { key: "count", label: "生成数量", type: "slider", defaultValue: 4, min: 1, max: 20, step: 1 },
+      { key: "count", label: "生成数量", type: "slider", defaultValue: 1, min: 1, max: 4, step: 1 },
     ],
   },
   "image-source": {
