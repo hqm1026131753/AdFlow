@@ -90,7 +90,7 @@ export function BatchInputUpload() {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60" onClick={() => setShowBatchUpload(false)}>
       <div
-        className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl w-[600px] max-h-[600px] flex flex-col shadow-2xl"
+        className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-[600px] max-h-[600px] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a2a]">

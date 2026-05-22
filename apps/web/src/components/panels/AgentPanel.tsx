@@ -360,7 +360,7 @@ export function AgentPanel() {
                   key={skill.label}
                   onClick={() => handleSend(skill.text)}
                   disabled={loading}
-                  className="group flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl border border-[#2a2a2a] bg-[#141414] text-zinc-400 hover:text-white hover:border-zinc-600 hover:bg-[#1a1a1a] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="group flex flex-col items-center gap-2 px-2 py-3 rounded-2xl border border-[#2a2a2a] bg-[#141414] text-zinc-400 hover:text-white hover:border-zinc-600 hover:bg-[#1a1a1a] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <span
                     style={{ color: skill.color }}
@@ -368,7 +368,7 @@ export function AgentPanel() {
                   >
                     {skill.icon}
                   </span>
-                  <span className="text-[12px] font-medium">{skill.label}</span>
+                  <span className="text-xs font-medium">{skill.label}</span>
                 </button>
               ))}
             </div>
@@ -407,10 +407,10 @@ export function AgentPanel() {
 
                 {/* Bubble */}
                 <div
-                  className={`text-[13px] leading-relaxed rounded-2xl px-3.5 py-2.5 max-w-[90%] whitespace-pre-wrap ${
+                  className={`text-sm leading-relaxed rounded-2xl px-3.5 py-2.5 max-w-[90%] whitespace-pre-wrap ${
                     msg.role === "user"
-                      ? "bg-violet-600/90 text-white rounded-br-md"
-                      : "bg-[#1a1a1a] border border-[#2a2a2a] text-zinc-300 rounded-bl-md"
+                      ? "bg-violet-600/90 text-white rounded-br-lg"
+                      : "bg-[#1a1a1a] border border-[#2a2a2a] text-zinc-300 rounded-bl-lg"
                   }`}
                 >
                   {msg.text}
@@ -454,7 +454,7 @@ export function AgentPanel() {
         <div className="px-4 pt-2 pb-1 shrink-0">
           <button
             onClick={() => setShowSkills(true)}
-            className="flex items-center gap-1 text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors"
+            className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
           >
             <RotateCcw className="w-3 h-3" />
             显示技能快捷入口
@@ -471,7 +471,7 @@ export function AgentPanel() {
                 key={skill.label}
                 onClick={() => handleSend(skill.text)}
                 disabled={loading}
-                className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full border border-[#2a2a2a] bg-[#141414] text-[11px] text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-colors disabled:opacity-40"
+                className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full border border-[#2a2a2a] bg-[#141414] text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-colors disabled:opacity-40"
               >
                 <span style={{ color: skill.color }}>{skill.icon}</span>
                 {skill.label}
@@ -499,7 +499,7 @@ export function AgentPanel() {
               }}
               placeholder="描述你的需求，或输入 @ 提及节点..."
               disabled={loading}
-              className="w-full bg-transparent text-[13px] text-zinc-300 placeholder-zinc-600 focus:outline-none disabled:opacity-40"
+              className="w-full bg-transparent text-sm text-zinc-300 placeholder-zinc-600 focus:outline-none disabled:opacity-40"
             />
           </div>
 
@@ -521,7 +521,7 @@ export function AgentPanel() {
               </button>
               <button className="flex items-center gap-0.5 px-2 py-1 rounded-lg text-zinc-600 hover:text-zinc-400 hover:bg-[#252525] transition-colors">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span className="text-[11px]">Agent</span>
+                <span className="text-xs">Agent</span>
                 <ChevronDown className="w-3 h-3" />
               </button>
             </div>

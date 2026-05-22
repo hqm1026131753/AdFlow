@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from "react";
-import { Workflow, Save, FolderOpen, FilePlus, Check, AlertCircle, Loader2, Images } from "lucide-react";
+import { Workflow, Save, FolderOpen, FilePlus, Check, AlertCircle, Loader2, Images, X } from "lucide-react";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useExecutionStore } from "../../store/executionStore";
 
@@ -71,15 +71,15 @@ export function TopBar() {
   return (
     <>
       <header className="h-11 shrink-0 bg-[#141414] border-b border-[#2a2a2a] flex items-center justify-between px-4 z-10">
-        <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
+        <div className="flex items-center gap-3">
+          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
             <Workflow className="w-3.5 h-3.5 text-white" />
           </div>
           <span className="text-sm font-semibold text-zinc-200">AdFlow</span>
           <span className="text-xs text-zinc-600">|</span>
           <span className="text-sm text-zinc-400 truncate max-w-[200px]">{workflowName}</span>
           {workflowId && (
-            <span className="text-xs text-zinc-600 font-mono">{workflowId.slice(0, 6)}</span>
+            <span className="text-[10px] text-zinc-600 font-mono tracking-tight">{workflowId.slice(0, 6)}</span>
           )}
         </div>
 
@@ -94,7 +94,7 @@ export function TopBar() {
 
           <button
             onClick={() => setShowBatchUpload(true)}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md hover:bg-white/5 text-xs text-zinc-400 transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-white/5 text-xs text-zinc-400 transition-colors"
             title="Batch input"
           >
             <Images className="w-3.5 h-3.5" />
@@ -103,7 +103,7 @@ export function TopBar() {
 
           <button
             onClick={newWorkflow}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md hover:bg-white/5 text-xs text-zinc-400 transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-white/5 text-xs text-zinc-400 transition-colors"
           >
             <FilePlus className="w-3.5 h-3.5" />
             New
@@ -111,7 +111,7 @@ export function TopBar() {
 
           <button
             onClick={handleOpenLoad}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md hover:bg-white/5 text-xs text-zinc-400 transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-white/5 text-xs text-zinc-400 transition-colors"
           >
             <FolderOpen className="w-3.5 h-3.5" />
             Open
@@ -120,7 +120,7 @@ export function TopBar() {
           <button
             onClick={saveWorkflow}
             disabled={saveStatus === "saving"}
-            className="flex items-center gap-1 px-3 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-xs text-zinc-300 transition-colors border border-zinc-700"
+            className="flex items-center gap-1 px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-xs text-zinc-300 transition-colors border border-zinc-700"
           >
             {saveIcon}
             {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save"}
@@ -129,7 +129,7 @@ export function TopBar() {
           <button
             onClick={handleRun}
             disabled={isRunning || nodeCount === 0}
-            className="flex items-center gap-1 px-3 py-1 rounded-md bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-xs text-white transition-colors"
+            className="flex items-center gap-1 px-3 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-xs text-white transition-colors"
           >
             {isRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Run Workflow"}
           </button>
@@ -139,12 +139,12 @@ export function TopBar() {
       {showLoadDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowLoadDialog(false)}>
           <div
-            className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl w-[420px] max-h-[500px] flex flex-col shadow-2xl"
+            className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-[420px] max-h-[500px] flex flex-col shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a2a]">
               <h2 className="text-sm font-semibold text-zinc-200">Open Workflow</h2>
-              <button onClick={() => setShowLoadDialog(false)} className="text-zinc-500 hover:text-zinc-300 text-sm">✕</button>
+              <button onClick={() => setShowLoadDialog(false)} className="text-zinc-500 hover:text-zinc-300"><X className="w-3.5 h-3.5" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-2">
               {savedWorkflows.length === 0 ? (
@@ -154,7 +154,7 @@ export function TopBar() {
                   <button
                     key={wf.id}
                     onClick={() => loadWorkflow(wf.id)}
-                    className="w-full text-left px-3 py-2.5 rounded-md hover:bg-white/5 transition-colors flex flex-col gap-0.5"
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-white/5 transition-colors flex flex-col gap-0.5"
                   >
                     <span className="text-sm text-zinc-300">{wf.name}</span>
                     <span className="text-xs text-zinc-600">

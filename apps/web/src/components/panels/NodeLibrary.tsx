@@ -43,7 +43,7 @@ export function NodeLibrary() {
                     key={def.type}
                     draggable
                     onDragStart={(e) => onDragStart(e, def.type)}
-                    className="flex items-center gap-2 px-2.5 py-2 rounded-md cursor-grab active:cursor-grabbing hover:bg-white/5 transition-colors border border-transparent hover:border-zinc-700/50"
+                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-grab active:cursor-grabbing hover:bg-white/5 transition-colors border border-transparent hover:border-zinc-700/50"
                   >
                     <div
                       className="w-6 h-6 rounded flex items-center justify-center shrink-0"

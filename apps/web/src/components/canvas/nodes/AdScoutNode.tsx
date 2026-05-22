@@ -127,7 +127,7 @@ export const AdScoutNode = memo(function AdScoutNode({ id, data, selected }: Nod
       {/* ── Card ── */}
       <div
         onClick={onClick}
-        className={`bg-[#1a1a1a] rounded-xl ${ringColor} cursor-pointer hover:ring-zinc-500/50 transition-shadow group/node`}
+        className={`bg-[#1a1a1a] rounded-2xl ${ringColor} cursor-pointer hover:ring-zinc-500/50 transition-shadow group/node`}
       >
         {/* Input handles */}
         {def.inputs.map((port) => (
@@ -154,7 +154,7 @@ export const AdScoutNode = memo(function AdScoutNode({ id, data, selected }: Nod
 
         {/* Header */}
         <div
-          className="flex items-center gap-2 px-3 py-2 rounded-t-xl"
+          className="flex items-center gap-2 px-3 py-2 rounded-t-2xl"
           style={{ backgroundColor: `${def.color}15` }}
         >
           <div
@@ -223,7 +223,7 @@ export const AdScoutNode = memo(function AdScoutNode({ id, data, selected }: Nod
       {/* ── Floating config dialog ── */}
       {selected && (
         <div
-          className="absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-[#141414] rounded-xl border border-[#2a2a2a] shadow-2xl shadow-black/60 z-50 flex flex-col gap-3 p-4"
+          className="absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-[#141414] rounded-2xl border border-[#2a2a2a] shadow-2xl shadow-black/60 z-50 flex flex-col gap-3 p-4"
           style={{ width: 480 }}
           onClick={(e) => e.stopPropagation()}
         >

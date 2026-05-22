@@ -80,7 +80,7 @@ export const SourceNode = memo(function SourceNode({ id, data, selected }: NodeP
   return (
     <div
       onClick={onClick}
-      className={`bg-[#1a1a1a] rounded-xl ${ringColor} cursor-pointer hover:ring-zinc-500/50 transition-shadow overflow-visible group/node`}
+      className={`bg-[#1a1a1a] rounded-2xl ${ringColor} cursor-pointer hover:ring-zinc-500/50 transition-shadow overflow-visible group/node`}
       style={{ minWidth: 80 }}
     >
       {/* Handles — input + output */}
@@ -107,7 +107,7 @@ export const SourceNode = memo(function SourceNode({ id, data, selected }: NodeP
 
       {/* Header */}
       <div
-        className="flex items-center gap-2 px-3 py-2 rounded-t-xl"
+        className="flex items-center gap-2 px-3 py-2 rounded-t-2xl"
         style={{ backgroundColor: `${def.color}15` }}
       >
         <div
